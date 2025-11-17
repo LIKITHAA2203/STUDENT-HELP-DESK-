@@ -1,0 +1,487 @@
+   /* StudentHelpDesk.java
+   Full GUI-based Student Help Desk (single-file)
+   - Home (HELP DESK) with Student / Admin buttons
+   - Menu (Home, History, Support, Rating)
+   - Student details -> Query -> Submit to selected Admin
+   - Admin dashboard: table, reply to selected query
+   - History: Student History & Admin History
+   - Rating page: students can rate admins (1-5 stars)
+   - Preloaded student + admin data per user's input
+   - Brown / white aesthetic theme
+*/
+
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.*;
+import java.text.SimpleDateFormat;
+
+public class StudentHelpDesk {
+
+    // ---------- Data classes ----------
+    static class Student {
+        String name, roll, classSec, year;
+        Student(String name, String roll, String classSec, String year) {
+            this.name = name; this.roll = roll; this.classSec = classSec; this.year = year;
+        }
+        public String toString() { return name + " (" + roll + ")"; }
+    }
+
+    static class QueryRecord {
+        Student student;
+        String toAdmin;
+        String queryText;
+        String replyText;
+        Date timestamp;
+        QueryRecord(Student s, String toAdmin, String q) {
+            this.student = s; this.toAdmin = toAdmin; this.queryText = q;
+            this.replyText = ""; this.timestamp = new Date();
+        }
+    }
+
+    // ---------- Data storage ----------
+    static java.util.List<Student> students = new ArrayList<>();
+    static java.util.List<String> admins = new ArrayList<>();
+    static java.util.List<QueryRecord> queries = new ArrayList<>();
+    // ratings: admin -> list of ints
+    static Map<String, java.util.List<Integer>> ratings = new HashMap<>();
+
+    // ---------- UI Colors ----------
+    static final Color BROWN = new Color(150, 111, 51); // warm brown
+    static final Color LIGHT_BROWN = new Color(222, 210, 196);
+    static final Color WHITE = Color.WHITE;
+
+    // ---------- Main frame holder ----------
+    static JFrame mainFrame;
+
+    // ---------- Utility ----------
+    static SimpleDateFormat df = new SimpleDateFormat("dd-MM-yyyy HH:mm");
+
+    // ---------- Initialize sample data per user's inputs ----------
+    static void initializeData() {
+        // Given students
+        students.add(new Student("LIKITHAA S", "2117240020208", "CSE - D", "2nd Year"));
+        students.add(new Student("YAMINI PRIYA K", "2117240020204", "CSE - C", "2nd Year"));
+        students.add(new Student("MAHEERA B", "2117240020219", "CSE - D", "2nd Year"));
+        students.add(new Student("SPANDANA M", "2117240020226", "CSE - B", "2nd Year"));
+        // Two extra students (added by me)
+        students.add(new Student("ARJUN K", "2117240020235", "CSE - A", "2nd Year"));
+        students.add(new Student("PRIYA R", "2117240020241", "CSE - C", "2nd Year"));
+
+        // Admins provided
+        admins.add("NANDHINI MAM (DPCO)");
+        admins.add("BASKAR SIR (DS)");
+        admins.add("SUDHAKAR SIR (DM)");
+        admins.add("ANGALAPARAMESHWARI MAM (AI)");
+        admins.add("SRINIVASAN SIR (OPPS)");
+
+        for (String a : admins) ratings.put(a, new ArrayList<>());
+    }
+
+    // ---------- Menu builder (top-left) ----------
+    static JButton menuButton; // persistent
+    static void addMenuToFrame(JFrame f) {
+        menuButton = new JButton("â˜°");
+        menuButton.setFont(new Font("Dialog", Font.BOLD, 18));
+        menuButton.setBackground(WHITE);
+        menuButton.setFocusable(false);
+        JPopupMenu menu = new JPopupMenu();
+        JMenuItem homeItem = new JMenuItem("Home");
+        JMenuItem historyItem = new JMenuItem("History");
+        JMenuItem supportItem = new JMenuItem("Support");
+        JMenuItem ratingItem = new JMenuItem("Rating");
+
+        homeItem.addActionListener(e -> { f.dispose(); showHomePage(); });
+        historyItem.addActionListener(e -> { f.dispose(); showHistoryPage(); });
+        supportItem.addActionListener(e -> { f.dispose(); showSupportPage(); });
+        ratingItem.addActionListener(e -> { f.dispose(); showRatingPage(); });
+
+        menu.add(homeItem);
+        menu.add(historyItem);
+        menu.add(supportItem);
+        menu.add(ratingItem);
+
+        menuButton.addActionListener(e -> menu.show(menuButton, 0, menuButton.getHeight()));
+        JPanel topLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 5));
+        topLeft.setOpaque(false);
+        topLeft.add(menuButton);
+        f.add(topLeft, BorderLayout.NORTH);
+    }
+
+    // ---------- HOME PAGE ----------
+    public static void showHomePage() {
+        mainFrame = new JFrame("HELP DESK");
+        mainFrame.setSize(700, 450);
+        mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        mainFrame.setLayout(new BorderLayout());
+        mainFrame.getContentPane().setBackground(LIGHT_BROWN);
+
+        // Menu
+        addMenuToFrame(mainFrame);
+
+        // Title center
+        JPanel center = new JPanel(new BorderLayout());
+        center.setOpaque(false);
+        JLabel title = new JLabel("HELP DESK", SwingConstants.CENTER);
+        title.setFont(new Font("Serif", Font.BOLD, 40));
+        title.setForeground(BROWN);
+        title.setBorder(new EmptyBorder(20,0,10,0));
+
+        // Student/Admin buttons as boxes
+        JPanel boxPanel = new JPanel(new GridLayout(1,2,30,0));
+        boxPanel.setOpaque(false);
+        boxPanel.setBorder(new EmptyBorder(20, 80, 80, 80));
+
+        JButton studentBtn = bigBoxButton("ðŸ‘©â€ðŸŽ“ STUDENT");
+        JButton adminBtn = bigBoxButton("ðŸ§‘â€ðŸ’¼ ADMIN");
+
+        studentBtn.addActionListener(e -> {
+            mainFrame.dispose();
+            showStudentDetailsPage();
+        });
+        adminBtn.addActionListener(e -> {
+            mainFrame.dispose();
+            showAdminDashboard();
+        });
+
+        boxPanel.add(studentBtn);
+        boxPanel.add(adminBtn);
+
+        center.add(title, BorderLayout.NORTH);
+        center.add(boxPanel, BorderLayout.CENTER);
+
+        mainFrame.add(center, BorderLayout.CENTER);
+        mainFrame.setLocationRelativeTo(null);
+        mainFrame.setVisible(true);
+    }
+
+    static JButton bigBoxButton(String text) {
+        JButton b = new JButton("<html><center>" + text + "</center></html>");
+        b.setFont(new Font("SansSerif", Font.BOLD, 22));
+        b.setBackground(WHITE);
+        b.setForeground(BROWN);
+        b.setFocusPainted(false);
+        b.setBorder(BorderFactory.createLineBorder(BROWN, 2, true));
+        return b;
+    }
+
+    // ---------- STUDENT DETAILS PAGE ----------
+    public static void showStudentDetailsPage() {
+        JFrame f = new JFrame("Student Details");
+        f.setSize(600, 420);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setLayout(new BorderLayout());
+        f.getContentPane().setBackground(LIGHT_BROWN);
+
+        addMenuToFrame(f);
+
+        JPanel pnl = new JPanel(new BorderLayout(10,10));
+        pnl.setBorder(new EmptyBorder(10, 20, 20, 20));
+        pnl.setOpaque(false);
+
+        JLabel header = new JLabel("Enter Student Details", SwingConstants.CENTER);
+        header.setFont(new Font("SansSerif", Font.BOLD, 20));
+        header.setForeground(BROWN);
+
+        JPanel form = new JPanel(new GridLayout(6,2,8,8));
+        form.setOpaque(false);
+
+        // name selection dropdown + manual input
+        form.add(new JLabel("Select Student (or choose 'New') :"));
+        JComboBox<String> studentSelect = new JComboBox<>();
+        studentSelect.addItem("New Student");
+        for (Student s : students) studentSelect.addItem(s.toString());
+        form.add(studentSelect);
+
+        form.add(new JLabel("Name:"));
+        JTextField nameField = new JTextField();
+        form.add(nameField);
+
+        form.add(new JLabel("Roll No:"));
+        JTextField rollField = new JTextField();
+        form.add(rollField);
+
+        form.add(new JLabel("Class & Section:"));
+        JTextField classField = new JTextField();
+        form.add(classField);
+
+        form.add(new JLabel("Year:"));
+        JTextField yearField = new JTextField();
+        form.add(yearField);
+
+        // Buttons
+        JButton nextBtn = new JButton("Next â†’");
+        JButton backBtn = new JButton("â¬… Back");
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnPanel.setOpaque(false);
+        btnPanel.add(backBtn);
+        btnPanel.add(nextBtn);
+
+        pnl.add(header, BorderLayout.NORTH);
+        pnl.add(form, BorderLayout.CENTER);
+        pnl.add(btnPanel, BorderLayout.SOUTH);
+
+        // On selecting an existing student, auto-fill
+        studentSelect.addActionListener(e -> {
+            int idx = studentSelect.getSelectedIndex();
+            if (idx <= 0) { // new
+                nameField.setText("");
+                rollField.setText("");
+                classField.setText("");
+                yearField.setText("");
+            } else {
+                Student s = students.get(idx-1);
+                nameField.setText(s.name);
+                rollField.setText(s.roll);
+                classField.setText(s.classSec);
+                yearField.setText(s.year);
+            }
+        });
+
+        nextBtn.addActionListener(e -> {
+            String name = nameField.getText().trim();
+            String roll = rollField.getText().trim();
+            String classSec = classField.getText().trim();
+            String year = yearField.getText().trim();
+            if (name.isEmpty() || roll.isEmpty() || classSec.isEmpty() || year.isEmpty()) {
+                JOptionPane.showMessageDialog(f, "Please fill all fields.", "Missing Data", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            // If student not in list, add them (basic uniqueness check on roll)
+            boolean exists = false;
+            for (Student s : students) {
+                if (s.roll.equals(roll)) { exists = true; break; }
+            }
+            Student current;
+            if (!exists) {
+                current = new Student(name, roll, classSec, year);
+                students.add(current);
+                // update studentSelect? not necessary now
+            } else {
+                // find that student object
+                current = null;
+                for (Student s : students) if (s.roll.equals(roll)) { current = s; break; }
+            }
+            f.dispose();
+            showStudentQueryPage(current);
+        });
+
+        backBtn.addActionListener(e -> { f.dispose(); showHomePage(); });
+
+        f.add(pnl, BorderLayout.CENTER);
+        f.setLocationRelativeTo(null);
+        f.setVisible(true);
+    }
+
+    // ---------- STUDENT QUERY PAGE ----------
+    public static void showStudentQueryPage(Student student) {
+        JFrame f = new JFrame("Submit Query - " + student.name);
+        f.setSize(700, 480);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setLayout(new BorderLayout());
+        f.getContentPane().setBackground(LIGHT_BROWN);
+
+        addMenuToFrame(f);
+
+        JPanel topPanel = new JPanel(new GridLayout(2,1));
+        topPanel.setBorder(new EmptyBorder(10,10,10,10));
+        topPanel.setOpaque(false);
+
+        JLabel info = new JLabel("Student: " + student.name + "   |   Roll: " + student.roll + "   |   " + student.classSec + "   |   " + student.year);
+        info.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        info.setForeground(BROWN);
+
+        topPanel.add(info);
+
+        JPanel middle = new JPanel(new GridLayout(4,1,6,6));
+        middle.setBorder(new EmptyBorder(10,40,10,40));
+        middle.setOpaque(false);
+
+        JPanel toPanel = new JPanel(new BorderLayout(8,8));
+        toPanel.setOpaque(false);
+        JLabel toLabel = new JLabel("To (Select Admin):");
+        JComboBox<String> adminCombo = new JComboBox<>();
+        for (String a : admins) adminCombo.addItem(a);
+        adminCombo.setBackground(WHITE);
+        toPanel.add(toLabel, BorderLayout.WEST);
+        toPanel.add(adminCombo, BorderLayout.CENTER);
+
+        // Provide an arrow-like button to "expand" - functionality is simply to open dropdown
+        JButton expandBtn = new JButton("â‡©");
+        expandBtn.setFocusable(false);
+        expandBtn.addActionListener(e -> {
+            adminCombo.showPopup();
+        });
+        toPanel.add(expandBtn, BorderLayout.EAST);
+
+        middle.add(toPanel);
+
+        middle.add(new JLabel("Enter your query below:"));
+        JTextArea queryArea = new JTextArea(6, 40);
+        JScrollPane qScroll = new JScrollPane(queryArea);
+        middle.add(qScroll);
+
+        JPanel btnP = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnP.setOpaque(false);
+        JButton submitBtn = new JButton("Submit Query");
+        JButton backBtn = new JButton("â¬… Back");
+        btnP.add(backBtn);
+        btnP.add(submitBtn);
+
+        // Add to frame
+        f.add(topPanel, BorderLayout.NORTH);
+        f.add(middle, BorderLayout.CENTER);
+        f.add(btnP, BorderLayout.SOUTH);
+
+        submitBtn.addActionListener(e -> {
+            String toAdmin = (String) adminCombo.getSelectedItem();
+            String qtext = queryArea.getText().trim();
+            if (qtext.isEmpty()) {
+                JOptionPane.showMessageDialog(f, "Please write your query before submitting.", "Empty Query", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            QueryRecord qr = new QueryRecord(student, toAdmin, qtext);
+            queries.add(qr);
+            JOptionPane.showMessageDialog(f, "Query sent to " + toAdmin + " successfully!", "Submitted", JOptionPane.INFORMATION_MESSAGE);
+            queryArea.setText("");
+        });
+
+        backBtn.addActionListener(e -> { f.dispose(); showHomePage(); });
+
+        f.setLocationRelativeTo(null);
+        f.setVisible(true);
+    }
+
+    // ---------- ADMIN DASHBOARD ----------
+    static DefaultTableModel adminTableModel;
+    public static void showAdminDashboard() {
+        JFrame f = new JFrame("Admin Dashboard");
+        f.setSize(900, 500);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setLayout(new BorderLayout());
+        f.getContentPane().setBackground(LIGHT_BROWN);
+
+        addMenuToFrame(f);
+
+        JLabel header = new JLabel("Admin Dashboard - View & Reply to Queries", SwingConstants.CENTER);
+        header.setFont(new Font("SansSerif", Font.BOLD, 18));
+        header.setForeground(BROWN);
+        header.setBorder(new EmptyBorder(10,10,10,10));
+
+        // Table columns: Student Name, Roll, ClassSec, Year, To(Admin), Query, Reply, Time
+        String[] cols = {"Student Name", "Roll No", "Class&Sec", "Year", "To(Admin)", "Query", "Reply", "Time"};
+        adminTableModel = new DefaultTableModel(cols, 0) {
+            public boolean isCellEditable(int row, int column) { return false; }
+        };
+        JTable table = new JTable(adminTableModel);
+        table.setRowHeight(24);
+        JScrollPane tableScroll = new JScrollPane(table);
+
+        // Buttons
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        btnPanel.setOpaque(false);
+        JButton refreshBtn = new JButton("Refresh");
+        JButton replyBtn = new JButton("Reply to Selected");
+        JButton backBtn = new JButton("â¬… Back");
+        btnPanel.add(backBtn);
+        btnPanel.add(refreshBtn);
+        btnPanel.add(replyBtn);
+
+        refreshBtn.addActionListener(e -> refreshAdminTable());
+        backBtn.addActionListener(e -> { f.dispose(); showHomePage(); });
+
+        replyBtn.addActionListener(e -> {
+            int sel = table.getSelectedRow();
+            if (sel < 0) {
+                JOptionPane.showMessageDialog(f, "Select a query row to reply.", "No Selection", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            // find corresponding QueryRecord by matching Student Roll and timestamp (unique enough)
+            String roll = (String) adminTableModel.getValueAt(sel, 1);
+            String timeStr = (String) adminTableModel.getValueAt(sel, 7);
+            QueryRecord target = null;
+            synchronized (queries) {
+                for (QueryRecord qr : queries) {
+                    if (qr.student.roll.equals(roll) && df.format(qr.timestamp).equals(timeStr)) { target = qr; break; }
+                }
+            }
+            if (target == null) { JOptionPane.showMessageDialog(f, "Could not locate the query record.", "Error", JOptionPane.ERROR_MESSAGE); return; }
+            // Reply dialog
+            JTextArea replyArea = new JTextArea(8,40);
+            replyArea.setText(target.replyText);
+            int res = JOptionPane.showConfirmDialog(f, new JScrollPane(replyArea), 
+                    "Reply to: " + target.student.name + " (" + target.student.roll + ")", JOptionPane.OK_CANCEL_OPTION);
+            if (res == JOptionPane.OK_OPTION) {
+                String reply = replyArea.getText().trim();
+                if (reply.isEmpty()) {
+                    JOptionPane.showMessageDialog(f, "Reply cannot be empty.", "Empty Reply", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                target.replyText = reply;
+                JOptionPane.showMessageDialog(f, "Reply submitted.", "Done", JOptionPane.INFORMATION_MESSAGE);
+                refreshAdminTable();
+            }
+        });
+
+        f.add(header, BorderLayout.NORTH);
+        f.add(tableScroll, BorderLayout.CENTER);
+        f.add(btnPanel, BorderLayout.SOUTH);
+
+        f.setLocationRelativeTo(null);
+        f.setVisible(true);
+
+        refreshAdminTable();
+    }
+
+    static void refreshAdminTable() {
+        if (adminTableModel == null) return;
+        adminTableModel.setRowCount(0);
+        synchronized (queries) {
+            for (QueryRecord qr : queries) {
+                String reply = qr.replyText.isEmpty() ? "<No Reply>" : qr.replyText;
+                adminTableModel.addRow(new Object[]{qr.student.name, qr.student.roll, qr.student.classSec, qr.student.year, qr.toAdmin, qr.queryText, reply, df.format(qr.timestamp)});
+            }
+        }
+    }
+
+    // ---------- HISTORY PAGE (Student & Admin tabs) ----------
+    public static void showHistoryPage() {
+        JFrame f = new JFrame("History");
+        f.setSize(900, 520);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        f.setLayout(new BorderLayout());
+        f.getContentPane().setBackground(LIGHT_BROWN);
+
+        addMenuToFrame(f);
+
+        JLabel header = new JLabel("History", SwingConstants.CENTER);
+        header.setFont(new Font("SansSerif", Font.BOLD, 18));
+        header.setForeground(BROWN);
+        header.setBorder(new EmptyBorder(8,8,8,8));
+
+        JTabbedPane tabs = new JTabbedPane();
+
+        // Student History: columns Student, To(Admin), Query, Reply, Time
+        String[] sCols = {"Student", "To(Admin)", "Query", "Reply", "Time"};
+        DefaultTableModel sModel = new DefaultTableModel(sCols,0) { public boolean isCellEditable(int r,int c){return false;} };
+        JTable sTable = new JTable(sModel);
+        JScrollPane sScroll = new JScrollPane(sTable);
+        refreshStudentHistory(sModel);
+
+        // Admin History: Admin, Student, Query, Reply, Time
+        String[] aCols = {"Admin", "Student", "Query", "Reply", "Time"};
+        DefaultTableModel aModel = new DefaultTableModel(aCols,0) { public boolean isCellEditable(int r,int c){return false;} };
+        JTable aTable = new JTable(aModel);
+        JScrollPane aScroll = new JScrollPane(aTable);
+        refreshAdminHistory(aModel);
+
+        tabs.addTab("Student History", sScroll);
+        tabs.addTab("Admin History", aScroll);
+
+        JButton refreshBtn = new JButton("Refresh History");
+        refreshBtn.addActionListener(e -> { refreshStudentHistory(sModel); refreshAdminHistory(aModel); });
+
+        JPanel bottom = new JPanel(new FlowLayout(FlowLayout.RIGHT)); bottom.setOpaque(false);
+        JButton backBtn = new JButton("â¬… Back");
+        backBtn.addActionListener(e -> { f.dispose(); showHomePage(); })
